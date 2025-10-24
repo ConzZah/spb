@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+ ######################################
+ # Project: snowflake-proxy-builder
+ # Author:  ConzZah
+ # LM: 2025-10-24-08:07 // v0.1
+ ######################################
+
+echo -e "\n=== SPB v0.1 // ConzZah (c) 2025 ==="
+snowflake_git="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git"
+command -v "sudo" >/dev/null && doso="sudo" && uname -v| grep -q 'Debian' && pkg="apt install -yy"
+[ -f "/etc/alpine-release" ] && doso="doas" && pkg="apk add"
+h="$HOME" && cd "$h" || exit 1
+deps="curl git"; for dep in $deps; do
+! command -v "$dep" >/dev/null && $doso "$pkg $dep"
+done
+
+PFX="/usr/local"
+sys="$(uname -s)"
+arch="$(uname -m)"
+env | grep -q termux && tmx="1"
+[ "$arch" = "armv7l" ] && arch="armv6l"
+[ "$arch" = "aarch64" ] && arch="arm64"
+[ "$arch" = "x86_64" ] && arch="amd64"
+[[ "$arch" =~ ^("i686"|"i586"|"i486")$ ]] && arch="i386"
+
+## download & install go if it's not installed already
+export PATH="$PATH:$PFX/go/bin" ## <-- add to path by default
+export GOPROXY="direct"
+! command -v go >/dev/null && \
+{ echo -e "\n--> GO INSTALL NOT FOUND.\n--> DOWNLOADING GO..\n" && \
+[ -z "$tmx" ] && { go="$(curl -sL "https://go.dev/dl/"| grep -o -m1 "go.*${sys,,}-${arch}.*.gz")"
+[ -n "$go" ] && go_link="https://go.dev/dl/$go" && \
+curl -#LO "$go_link" && \
+$doso rm -rf "$PFX/go" && \
+$doso tar -C "$PFX" -xzf "$go" || exit 1 ;}
+[ -n "$tmx" ] && pkg in golang ;}
+! go version >/dev/null && \
+echo -e "--> GO INSTALL FAILED!\n" && exit 1 || \
+echo -e "\n--> GO INSTALL FOUND"
+
+## clone / update snowflake-proxy
+echo -e "\n--> CLONING & BUILDING SNOWFLAKE..\n"
+[ ! -d "$h/snowflake" ] && git clone "$snowflake_git" || \
+[ -d "$h/snowflake" ] && cd "$h/snowflake" && git pull && echo ""
+## (re)build snowflake-proxy
+cd "$h/snowflake/proxy" && go build -ldflags "-checklinkname=0" && \
+echo -e "--> SUCCESSFULLY BUILT SNOWFLAKE\n\n--> LAUNCH SNOWFLAKE PROXY WITH:\n\n$h/snowflake/proxy/proxy\n" && \
+./proxy -version && echo && exit 0 || echo -e "--> FAILED TO BUILD SNOWFLAKE\n" && exit 1
