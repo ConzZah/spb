@@ -1,10 +1,22 @@
 #!/usr/bin/env sh
 
-## /// snowflake-proxy-builder // ConzZah // 2026-04-17 10:30 ///
+## /// snowflake-proxy-builder // ConzZah // 2026-04-17 11:42 ///
 
 printf "\n=== spb // ConzZah // 2026 ===\n"
 
 init () {
+static=""; proot=""; tmx=""; dbg=""; deb=""; bs=""; o=""; v=""
+## PROCESS ARGS ##
+while [ $# -gt 0 ]; do
+case $1 in
+*s|*static) export static="1";; ## <-- link statically (requires musl)
+*v|*verbose) export v="-v";; ## <-- be verbose during the build process
+*dbg|*debug) export dbg="1";; ## <-- don't strip debug info from executable
+*) printf "\nUSAGE: sh spb.sh [OPTION]\n\n[-dbg] [--debug]       do not strip debug info\n\n[-s] [--static]        link statically\n\n[-v] [--verbose]       be verbose\n\n[-h] [--help]          show help\n\n" && exit
+esac
+shift
+done
+
 snowflake_git="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git"
 tmx_proot_warn="--> PLEASE RE-LAUNCH IN ALPINE PROOT FOR STATIC BUILDS TO SUCCEED ON TERMUX."
 env | grep -q termux && tmx="1"
@@ -54,9 +66,10 @@ export PATH="$PATH:$PFX/go/bin"
 ## download & install go if it's not installed already
 ! go version >/dev/null 2>&1 && { printf '\n%s\n\n' "--> DOWNLOADING GO.."
 
-## if we aren't on termux,
+## if we are on termux and in proot, 
+## OR if we aren't on termux at all,
 ## download go the traditional way
-[ -z "$tmx" ] &&  {
+[ -n "$proot" ] || [ -z "$tmx" ] && {
 go_link="https://go.dev/dl"
 go="$(curl -sL "$go_link"| grep 'Stable versions' -A420| grep -o -m1 "go.*${sys}-${arch}.*.gz"| cut -d '"' -f 1)"
 go_link="$go_link/$go" && curl -#LO "$go_link" && \
@@ -110,15 +123,4 @@ printf '\n%s\n' "--> SUCCESSFULLY BUILT SNOWFLAKE"
 printf '\n%s\n\n%s\n\n' "--> LAUNCH SNOWFLAKE PROXY WITH:" "$HOME/snowflake/proxy/$o"; exit 0 ;}
 }
 
-#### PROCESS ARGS ####
-while [ $# -gt 0 ]; do
-case $1 in
-*v|*verbose) export v="-v";; ## <-- be verbose during the build process
-*dbg|*debug) export dbg="1";; ## <-- don't strip debug info from executable
-*s|*static) export static="1" && export fr="-a";; ## <-- link statically (requires musl)
-*) printf "\nUSAGE: sh spb.sh [OPTION]\n\n[-dbg] [--debug]       do not strip debug info\n\n[-s] [--static]        link statically\n\n[-v] [--verbose]       be verbose\n\n[-h] [--help]          show help\n\n" && exit
-esac
-shift
-done
-
-init
+init "$@"
