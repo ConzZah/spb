@@ -1,0 +1,124 @@
+#!/usr/bin/env sh
+
+## /// snowflake-proxy-builder // ConzZah // 2026-04-17 10:30 ///
+
+printf "\n=== spb // ConzZah // 2026 ===\n"
+
+init () {
+snowflake_git="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git"
+tmx_proot_warn="--> PLEASE RE-LAUNCH IN ALPINE PROOT FOR STATIC BUILDS TO SUCCEED ON TERMUX."
+env | grep -q termux && tmx="1"
+uname -v| grep -iq 'Debian' && deb="1"
+[ -n "$deb" ] && pkg="apt install -yy"
+
+## alpine-specific
+[ -f "/etc/alpine-release" ] && \
+doso="doas" && pkg="apk add" && alp="1"
+
+## termux-specific ##
+## if running termux, AND static was specified, check if we're running alpine via proot
+## static builds will fail on termux otherwise, i tried, maybe i'm missing something, but that's okay.
+[ -n "$tmx" ] && { [ -n "$alp" ] && { printf "\n--> TERMUX + ALPINE PROOT DETECTED\n\n"; proot="1" ;}
+[ -z "$proot" ] && [ -n "$static" ] && printf '\n%s\n\n' "$tmx_proot_warn" && exit
+}
+
+cd "$HOME" || exit 1
+command -v "sudo" >/dev/null && doso="sudo"
+deps="curl grep tar git"; for dep in $deps; do
+! command -v "$dep" >/dev/null && eval "$doso $pkg $dep"
+done
+
+sys="$(uname -s)"
+case $sys in
+Darwin) sys="darwin";;
+Linux) sys="linux";;
+*) printf '%s' "--> ERROR: $sys IS CURRENTLY NOT SUPPORTED" && exit 1
+esac
+
+arch="$(uname -m)"
+[ -n "$tmx" ] && doso=""
+case $arch in
+armv7*|armv6*) arch="armv6l";;
+aarch64) arch="arm64";;
+x86_64) arch="amd64";;
+i*86) arch="386";;
+*) printf '%s' "--> ERROR: $arch IS CURRENTLY NOT SUPPORTED" && exit 1
+esac
+dl_go
+}
+
+dl_go () {
+PFX="/usr/local"
+export GOPROXY="direct"
+export PATH="$PATH:$PFX/go/bin"
+## download & install go if it's not installed already
+! go version >/dev/null 2>&1 && { printf '\n%s\n\n' "--> DOWNLOADING GO.."
+
+## if we aren't on termux,
+## download go the traditional way
+[ -z "$tmx" ] &&  {
+go_link="https://go.dev/dl"
+go="$(curl -sL "$go_link"| grep 'Stable versions' -A420| grep -o -m1 "go.*${sys}-${arch}.*.gz"| cut -d '"' -f 1)"
+go_link="$go_link/$go" && curl -#LO "$go_link" && \
+$doso rm -rf "$PFX/go" && $doso tar -C "$PFX" "${v}"-xzf "$go" || exit 1
+}
+
+## if we are on termux, but aren't in proot, download go via apt
+[ -n "$tmx" ] && [ -z "$proot" ] && apt install golang ;}
+go version >/dev/null && printf "\n--> GO INSTALL FOUND\n" && clone_snowflake || printf "\n--> GO INSTALL FAILED!\n\n" && exit 1
+}
+
+clone_snowflake () {
+## clone / update snowflake-proxy
+## should a local clone exist, run git pull
+[ ! -d "$HOME/snowflake" ] && printf "\n--> CLONING SNOWFLAKE..\n\n" && \
+git clone "$snowflake_git" && cd "$HOME/snowflake/proxy" || \
+printf "\n--> UPDATING SNOWFLAKE..\n\n" && \
+cd "$HOME/snowflake/proxy" && git pull
+build_snowflake
+}
+
+build_snowflake () {
+## setup default build
+[ -z "$static" ] && {
+o="proxy-$arch"
+ldflags="-checklinkname=0"
+printf "\n--> BUILDING SNOWFLAKE..\n" 
+}
+
+## setup static build
+[ -n "$static" ] && {
+export CGO_ENABLED=1
+o="proxy-static-$arch"
+ldflags="-linkmode external -extldflags -static -checklinkname=0"
+[ -z "$alp" ] && export CC=musl-gcc
+
+## if running debian, set musl-gcc and install if needed
+[ -n "$deb" ] && { ! command -v 'musl-gcc' >/dev/null && eval "$doso $pkg musl-dev musl-tools gcc" ;}
+printf "\n--> BUILDING SNOWFLAKE & LINKING STATICALLY..\n"
+}
+
+## BUILD THAT SH!T ##
+go build -a -ldflags="$ldflags" -o "$o" "${v}" && \
+bs="0" && build_status || [ -z "$bs" ] && bs="1"; build_status
+}
+
+build_status () {
+[ "$bs" = "1" ] && printf "\n--> FAILED TO BUILD SNOWFLAKE\n" && exit 1
+[ "$bs" = "0" ] && { [ -z "$dbg" ] && command -v strip >/dev/null && strip "$o"
+printf '\n%s\n' "--> SUCCESSFULLY BUILT SNOWFLAKE"
+printf '\n%s\n\n%s\n\n' "--> LAUNCH SNOWFLAKE PROXY WITH:" "$HOME/snowflake/proxy/$o"; exit 0 ;}
+}
+
+#### PROCESS ARGS ####
+while [ $# -gt 0 ]; do
+case $1 in
+*v|*verbose) export v="-v";; ## <-- be verbose during the build process
+*dbg|*debug) export dbg="1";; ## <-- don't strip debug info from executable
+*s|*static) export static="1" && export fr="-a";; ## <-- link statically (requires musl)
+*) printf "\nUSAGE: sh spb.sh [OPTION]\n\n[-dbg] [--debug]       do not strip debug info\n\n[-s] [--static]        link statically\n\n[-v] [--verbose]       be verbose\n\n[-h] [--help]          show help\n\n" && exit
+esac
+shift
+done
+
+init
