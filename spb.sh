@@ -1,11 +1,11 @@
 #!/usr/bin/env sh
 
-## /// snowflake-proxy-builder // ConzZah // 2026-04-17 11:42 ///
+## /// snowflake-proxy-builder // ConzZah // 2026-04-18 02:59 ///
 
 printf "\n=== spb // ConzZah // 2026 ===\n"
 
 init () {
-static=""; proot=""; tmx=""; dbg=""; deb=""; bs=""; o=""; v=""
+static=""; proot=""; tmx=""; dbg=""; deb=""; alp=""; bs=""; o=""; v=""
 ## PROCESS ARGS ##
 while [ $# -gt 0 ]; do
 case $1 in
@@ -19,9 +19,9 @@ done
 
 snowflake_git="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git"
 tmx_proot_warn="--> PLEASE RE-LAUNCH IN ALPINE PROOT FOR STATIC BUILDS TO SUCCEED ON TERMUX."
-env | grep -q termux && tmx="1"
-uname -v| grep -iq 'Debian' && deb="1"
-[ -n "$deb" ] && pkg="apt install -yy"
+env | grep -q termux && tmx="1" ## <-- check if running on termux
+uname -v| grep -iq 'Debian' && deb="1" ## <-- check if running on debian
+[ -n "$deb" ] || [ -n "$tmx" ] && pkg="apt install -yy"
 
 ## alpine-specific
 [ -f "/etc/alpine-release" ] && \
@@ -35,10 +35,18 @@ doso="doas" && pkg="apk add" && alp="1"
 }
 
 cd "$HOME" || exit 1
+## check for common dependencies
 command -v "sudo" >/dev/null && doso="sudo"
 deps="curl grep tar git"; for dep in $deps; do
 ! command -v "$dep" >/dev/null && eval "$doso $pkg $dep"
 done
+
+## check for system-specific build dependencies
+## (debian & termux)
+[ -n "$deb" ] || [ -n "$tmx" ] && [ -z "$alp" ] && \
+{ [ "$(dpkg -l build-essential| tail -n1| cut -c -2)" = "un" ] && eval "$doso $pkg build-essential" ;}
+## (alpine)
+[ -n "$alp" ] && { ! apk query build-base --installed| grep -q build-base && eval "$doso $pkg build-base" ;}
 
 sys="$(uname -s)"
 case $sys in
@@ -77,7 +85,7 @@ $doso rm -rf "$PFX/go" && $doso tar -C "$PFX" "${v}"-xzf "$go" || exit 1
 }
 
 ## if we are on termux, but aren't in proot, download go via apt
-[ -n "$tmx" ] && [ -z "$proot" ] && apt install golang ;}
+[ -n "$tmx" ] && [ -z "$proot" ] && $pkg golang ;}
 go version >/dev/null && printf "\n--> GO INSTALL FOUND\n" && clone_snowflake || printf "\n--> GO INSTALL FAILED!\n\n" && exit 1
 }
 
