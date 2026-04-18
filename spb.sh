@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-## /// snowflake-proxy-builder // ConzZah // 2026-04-18 02:59 ///
+## /// snowflake-proxy-builder // ConzZah // 2026-04-18 03:10 ///
 
 printf "\n=== spb // ConzZah // 2026 ===\n"
 
@@ -40,6 +40,9 @@ command -v "sudo" >/dev/null && doso="sudo"
 deps="curl grep tar git"; for dep in $deps; do
 ! command -v "$dep" >/dev/null && eval "$doso $pkg $dep"
 done
+
+## if we're root, clear $doso
+[ "$(whoami)" = "root" ] && doso=""
 
 ## check for system-specific build dependencies
 ## (debian & termux)
