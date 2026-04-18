@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-## /// snowflake-proxy-builder // ConzZah // 2026-04-18 03:10 ///
+## /// snowflake-proxy-builder // ConzZah // 2026-04-18 06:30 ///
 
 printf "\n=== spb // ConzZah // 2026 ===\n"
 
@@ -74,17 +74,21 @@ dl_go () {
 PFX="/usr/local"
 export GOPROXY="direct"
 export PATH="$PATH:$PFX/go/bin"
+## if on termux and in proot, edit $PATH,
+## so termux's binaries will not be used when building.
+[ -n "$proot" ] && PATH="$(echo $PATH| sed 's#:/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin##g')"
+
 ## download & install go if it's not installed already
 ! go version >/dev/null 2>&1 && { printf '\n%s\n\n' "--> DOWNLOADING GO.."
 
-## if we are on termux and in proot, 
+## if we are on termux and in proot,
 ## OR if we aren't on termux at all,
 ## download go the traditional way
 [ -n "$proot" ] || [ -z "$tmx" ] && {
 go_link="https://go.dev/dl"
 go="$(curl -sL "$go_link"| grep 'Stable versions' -A420| grep -o -m1 "go.*${sys}-${arch}.*.gz"| cut -d '"' -f 1)"
 go_link="$go_link/$go" && curl -#LO "$go_link" && \
-$doso rm -rf "$PFX/go" && $doso tar -C "$PFX" "${v}"-xzf "$go" || exit 1
+$doso rm -rf "$PFX/go" && $doso tar -C "$PFX" "${v}" -xzf "$go" || exit 1
 }
 
 ## if we are on termux, but aren't in proot, download go via apt
@@ -107,7 +111,7 @@ build_snowflake () {
 [ -z "$static" ] && {
 o="proxy-$arch"
 ldflags="-checklinkname=0"
-printf "\n--> BUILDING SNOWFLAKE..\n" 
+printf "\n--> BUILDING SNOWFLAKE..\n"
 }
 
 ## setup static build
